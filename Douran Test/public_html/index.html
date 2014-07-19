@@ -28,126 +28,133 @@
         </div>
         <script type="text/javascript">
 
-            var sinaNumber = 31; // Number of circles (Number of JSON requests)
+            var sinaNumber = 30; // Number of circles (Number of JSON requests)
             sinaColors = []; // Array to store colors retrieved using JSON
             sinaRadius = []; // Array to store numViews as radius, retrieved using JSON
 
             // Push color and radius into array
-            for (i = 0; i < sinaNumber; i++) {
-                $.getJSON("http://www.colourlovers.com/api/colors/random?format=json&jsonCallback=?", function(data) {
+            for (i = 0; i <= sinaNumber; i++) {
+                var req = $.getJSON("http://www.colourlovers.com/api/colors/random?format=json&jsonCallback=?", function(data) {
                     $.each(data, function(j, field) {
                         sinaColors.push("#" + field.hex);
                         if (field.numViews === 0) {
                             field.numViews = 1;
                         } //else if (field.numViews > 100) {
-                            //field.numViews = 100;
+                        //field.numViews = 100;
                         //}
                         sinaRadius.push(field.numViews);
                     });
                 });
             }
-            setTimeout( // It takes about 6 seconds to retrieve JSON 30 times.
-                        // We set a 7 seconds delay here. If not, all the circles turn black
-                    function() {
 
-                        var w = 1280, h = 800;
 
-                        // Here we store retrieved colors
-                        d3.scale.sinaCategory = function() {
-                            return d3.scale.ordinal().range(sinaColors);
-                        };
 
-                        // Assigning the colors and default radius to circles
-                        var nodes = d3.range(sinaNumber).map(function() {
-                            return {radius: 5}; // It's a default radius and it's not important. The real ones will append soon!
-                        }), color = d3.scale.sinaCategory();
 
-                        // Here we append the real Radius, that we've got retrieved using JSON
-                        for (var a = 0; a < sinaNumber; a++) {
-                            var temp = nodes[a];
-                            temp.radius = sinaRadius[a];
-                        }
 
-                        var force = d3.layout.force()
-                                .gravity(0.05)
-                                .charge(function(d, i) {
-                                    return i ? 0 : -2000;
-                                })
-                                .nodes(nodes)
-                                .size([w, h]);
 
-                        var root = nodes[0];
-                        root.radius = 0;
-                        root.fixed = true;
+            //setTimeout(// It takes about 6 seconds to retrieve JSON 30 times.
+            // We set a 7 seconds delay here. If not, all the circles turn black
+            req.done(function() {
 
-                        force.start();
+                var w = 1280, h = 800;
 
-                        var svg = d3.select("#body").append("svg:svg")
-                                .attr("width", w)
-                                .attr("height", h);
+                // Here we store retrieved colors
+                d3.scale.sinaCategory = function() {
+                    return d3.scale.ordinal().range(sinaColors);
+                };
 
-                        svg.selectAll("circle")
-                                .data(nodes.slice(1))
-                                .enter().append("svg:circle")
-                                .attr("r", function(d) {
-                                    return d.radius; //return d.radius - 2;
-                                })
-                                .style("fill", function(d, i) {
-                                    return color(i % 8);
-                                });
+                // Assigning the colors and default radius to circles
+                var nodes = d3.range(sinaNumber).map(function() {
+                    return {radius: 5}; // It's a default radius and it's not important. The real ones will append soon!
+                }), color = d3.scale.sinaCategory();
 
-                        force.on("tick", function(e) {
-                            var q = d3.geom.quadtree(nodes),
-                                    i = 0,
-                                    n = nodes.length;
+                // Here we append the real Radius, that we've got retrieved using JSON
+                for (var a = 0; a < sinaNumber; a++) {
+                    var temp = nodes[a];
+                    temp.radius = sinaRadius[a];
+                }
 
-                            while (++i < n) {
-                                q.visit(collide(nodes[i]));
+                var force = d3.layout.force()
+                        .gravity(0.05)
+                        .charge(function(d, i) {
+                            return i ? 0 : -2000;
+                        })
+                        .nodes(nodes)
+                        .size([w, h]);
+
+                var root = nodes[0];
+                root.radius = 0;
+                root.fixed = true;
+
+                force.start();
+
+                var svg = d3.select("#body").append("svg:svg")
+                        .attr("width", w)
+                        .attr("height", h);
+
+                svg.selectAll("circle")
+                        .data(nodes.slice(1))
+                        .enter().append("svg:circle")
+                        .attr("r", function(d) {
+                            return d.radius; //return d.radius - 2;
+                        })
+                        .style("fill", function(d, i) {
+                            return color(i % 8);
+                        });
+
+                force.on("tick", function(e) {
+                    var q = d3.geom.quadtree(nodes),
+                            i = 0,
+                            n = nodes.length;
+
+                    while (++i < n) {
+                        q.visit(collide(nodes[i]));
+                    }
+
+                    svg.selectAll("circle")
+                            .attr("cx", function(d) {
+                                return d.x;
+                            })
+                            .attr("cy", function(d) {
+                                return d.y;
+                            });
+                });
+
+                svg.on("mousemove", function() {
+                    var p1 = d3.svg.mouse(this);
+                    root.px = p1[0];
+                    root.py = p1[1];
+                    force.resume();
+                });
+
+                function collide(node) {
+                    var r = node.radius + 16,
+                            nx1 = node.x - r,
+                            nx2 = node.x + r,
+                            ny1 = node.y - r,
+                            ny2 = node.y + r;
+                    return function(quad, x1, y1, x2, y2) {
+                        if (quad.point && (quad.point !== node)) {
+                            var x = node.x - quad.point.x,
+                                    y = node.y - quad.point.y,
+                                    l = Math.sqrt(x * x + y * y),
+                                    r = node.radius + quad.point.radius;
+                            if (l < r) {
+                                l = (l - r) / l * .5;
+                                node.x -= x *= l;
+                                node.y -= y *= l;
+                                quad.point.x += x;
+                                quad.point.y += y;
                             }
-
-                            svg.selectAll("circle")
-                                    .attr("cx", function(d) {
-                                        return d.x;
-                                    })
-                                    .attr("cy", function(d) {
-                                        return d.y;
-                                    });
-                        });
-
-                        svg.on("mousemove", function() {
-                            var p1 = d3.svg.mouse(this);
-                            root.px = p1[0];
-                            root.py = p1[1];
-                            force.resume();
-                        });
-
-                        function collide(node) {
-                            var r = node.radius + 16,
-                                    nx1 = node.x - r,
-                                    nx2 = node.x + r,
-                                    ny1 = node.y - r,
-                                    ny2 = node.y + r;
-                            return function(quad, x1, y1, x2, y2) {
-                                if (quad.point && (quad.point !== node)) {
-                                    var x = node.x - quad.point.x,
-                                            y = node.y - quad.point.y,
-                                            l = Math.sqrt(x * x + y * y),
-                                            r = node.radius + quad.point.radius;
-                                    if (l < r) {
-                                        l = (l - r) / l * .5;
-                                        node.x -= x *= l;
-                                        node.y -= y *= l;
-                                        quad.point.x += x;
-                                        quad.point.y += y;
-                                    }
-                                }
-                                return x1 > nx2
-                                        || x2 < nx1
-                                        || y1 > ny2
-                                        || y2 < ny1;
-                            };
                         }
-                    }, 7000);
+                        return x1 > nx2
+                                || x2 < nx1
+                                || y1 > ny2
+                                || y2 < ny1;
+                    };
+                }
+            });
+            //, 7000);
         </script>
     </body>
 </html>
